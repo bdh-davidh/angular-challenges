@@ -1,49 +1,84 @@
-import { HttpClient } from '@angular/common/http';
-import { Component, inject, OnInit } from '@angular/core';
+import { Component, inject, OnInit, signal } from '@angular/core';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { randText } from '@ngneat/falso';
+import { HttpService } from '../../http.service';
+
+interface Todo {
+  id: string;
+  title: string;
+  body: string;
+  userId: string;
+}
 
 @Component({
-  imports: [],
+  imports: [MatProgressSpinnerModule],
   selector: 'app-root',
   template: `
-    @for (todo of todos; track todo.id) {
-      {{ todo.title }}
-      <button (click)="update(todo)">Update</button>
+    @if (error()) {
+      <div class="error">{{ error() }}</div>
+    }
+
+    @if (!loading()) {
+      @for (todo of todos(); track todo.id) {
+        @if (todo) {
+          <p>
+            {{ todo.title }}
+            <button (click)="update(todo)">Update</button>
+            <button (click)="remove(todo)">Remove</button>
+          </p>
+        }
+      }
     }
   `,
   styles: [],
 })
 export class AppComponent implements OnInit {
-  private http = inject(HttpClient);
+  http = inject(HttpService);
+  todos = signal<Todo[]>([]);
+  loading = signal<boolean>(false);
+  error = signal<string | null>(null);
 
-  todos!: any[];
-
-  ngOnInit(): void {
+  ngOnInit() {
+    this.loading.set(true);
     this.http
-      .get<any[]>('https://jsonplaceholder.typicode.com/todos')
-      .subscribe((todos) => {
-        this.todos = todos;
+      .fetchItems<Todo>('https://jsonplaceholder.typicode.com/todos')
+      .subscribe({
+        next: (data) => {
+          this.todos.set(data);
+          this.loading.set(false);
+        },
+        error: (err) => {
+          this.error.set('Failed to load todos. Please try again.');
+          this.loading.set(false);
+          console.error(err);
+        },
       });
   }
 
-  update(todo: any) {
+  remove(todoToRemove: Todo) {
+    this.loading.set(true);
     this.http
-      .put<any>(
-        `https://jsonplaceholder.typicode.com/todos/${todo.id}`,
-        JSON.stringify({
-          todo: todo.id,
-          title: randText(),
-          body: todo.body,
-          userId: todo.userId,
-        }),
-        {
-          headers: {
-            'Content-type': 'application/json; charset=UTF-8',
-          },
-        },
-      )
-      .subscribe((todoUpdated: any) => {
-        this.todos[todoUpdated.id - 1] = todoUpdated;
+      .removeItem('https://jsonplaceholder.typicode.com/todos/', todoToRemove)
+      .subscribe(() => {
+        this.todos.update((todos) =>
+          todos.filter((todo) => todo.id !== todoToRemove.id),
+        );
       });
+    this.loading.set(false);
+  }
+
+  update(todo: Todo) {
+    this.loading.set(true);
+    const updatedTodo = { ...todo, title: randText() };
+    this.http
+      .updateItem('https://jsonplaceholder.typicode.com/todos/', updatedTodo)
+      .subscribe((todoUpdated: Todo) => {
+        this.todos.update((todos) =>
+          todos.map((todo) =>
+            todo.id === todoUpdated.id ? todoUpdated : todo,
+          ),
+        );
+      });
+    this.loading.set(false);
   }
 }
