@@ -1,18 +1,23 @@
-import { Component } from '@angular/core';
+import { Component, Pipe } from '@angular/core';
+
+@Pipe({
+  name: 'NameIndex',
+})
+export class NameIndex {
+  transform(name: string, index: number) {
+    return `${name} - ${index}`;
+  }
+}
 
 @Component({
+  imports: [NameIndex],
   selector: 'app-root',
   template: `
     @for (person of persons; track person) {
-      {{ heavyComputation(person, $index) }}
+      {{ person | NameIndex: $index }}
     }
   `,
 })
 export class AppComponent {
   persons = ['toto', 'jack'];
-
-  heavyComputation(name: string, index: number) {
-    // very heavy computation
-    return `${name} - ${index}`;
-  }
 }
